@@ -27,8 +27,6 @@ created.
 
 package game
 
-import "core:fmt"
-import "core:math/linalg"
 import rl "vendor:raylib"
 
 PIXEL_WINDOW_HEIGHT :: 180
@@ -36,6 +34,7 @@ PIXEL_WINDOW_HEIGHT :: 180
 Game_Memory :: struct {
 	dynamic_objects: Dynamic_Objects,
 	player: Player,
+	world: World,
 	run: bool,
 }
 
@@ -58,31 +57,8 @@ ui_camera :: proc() -> rl.Camera2D {
 	}
 }
 
-get_player_input :: proc() -> rl.Vector2 {
-	input: rl.Vector2
-
-	if rl.IsKeyDown(.UP) || rl.IsKeyDown(.W) {
-		input.y -= 1
-	}
-	if rl.IsKeyDown(.DOWN) || rl.IsKeyDown(.S) {
-		input.y += 1
-	}
-	if rl.IsKeyDown(.LEFT) || rl.IsKeyDown(.A) {
-		input.x -= 1
-	}
-	if rl.IsKeyDown(.RIGHT) || rl.IsKeyDown(.D) {
-		input.x += 1
-	}
-
-	return linalg.normalize0(input)
-}
-
 update :: proc() {
-	player_update(&g.player, get_player_input())
-
-	if rl.IsKeyPressed(.F) {
-		player_spawn_fireball(&g.player, &g.dynamic_objects)
-	}
+	player_update(&g.player, &g.world)
 
 	dynamic_objects_update(&g.dynamic_objects)
 
@@ -96,18 +72,21 @@ draw :: proc() {
 	rl.BeginDrawing()
 	defer rl.EndDrawing()
 
-	rl.ClearBackground(rl.BLACK)
+	rl.ClearBackground(rl.DARKGRAY)
 
 	draw_with_camera(game_camera(), proc() {
-		player_draw(g.player)
-		rl.DrawRectangleV({20, 20}, {10, 10}, rl.RED)
-		rl.DrawRectangleV({-30, -20}, {10, 10}, rl.GREEN)
+		character_draw(g.player.character)
+
+		solids_iter := world_make_solids_iterator(&g.world)
+		for solid in world_solids_iter(&solids_iter) {
+			rl.DrawRectangleV(solid.position, solid.collision_box.size, rl.GREEN)
+		}
 
 		dynamic_objects_draw(&g.dynamic_objects)
 	})
 
 	draw_with_camera(ui_camera(), proc() {
-		rl.DrawText(fmt.ctprintf("player_pos: %v", g.player.position), 5, 5, 8, rl.WHITE)
+		player_draw_debug(&g.player)
 	})
 }
 
@@ -140,16 +119,66 @@ game_init_window :: proc() {
 game_init :: proc() {
 	g = new(Game_Memory)
 
-	player := Player {
-		texture = rl.LoadTexture("assets/round_cat.png"),
+	character: Character
+	character.stats = Character_Stats {
+		dash_speed = 150,
+		ground_move_speed = 10,
+		horizontal_acceleration = 10,
+		horizontal_deceleration = 10,
+		horizontal_friction = 200,
+		jump_force = 240,
+		gravity = {0, 600},
+		air_move_speed = 100,
+		air_acceleration = 80,
+		air_deceleration = 80,
+		air_friction = 80,
+		max_fall_speed = 250,
 	}
+	character.position = {50, 0}
+	character.collision_box = CollisionBox2D {
+		size = {10, 10},
+	}
+
+	player := Player {
+		character = character,
+	}
+
+	world: World
+
+	world_push_actor(&world, character.actor)
+	world_push_solid(&world, Solid2D {
+		position = {-10, -20},
+		collision_box = CollisionBox2D {
+			size = {50, 10},
+		},
+		collidable = true,
+	})
+	world_push_solid(&world, Solid2D {
+		position = {10, -20},
+		collision_box = CollisionBox2D {
+			size = {50, 10},
+		},
+		collidable = true,
+	})
+	world_push_solid(&world, Solid2D {
+		position = {30, -20},
+		collision_box = CollisionBox2D {
+			size = {50, 10},
+		},
+		collidable = true,
+	})
+	world_push_solid(&world, Solid2D {
+		position = {10, 20},
+		collision_box = CollisionBox2D {
+			size = {1000, 10},
+		},
+		collidable = true,
+	})
 
 	g^ = Game_Memory {
 		run = true,
-
-		// You can put textures, sounds and music in the `assets` folder. Those
-		// files will be part any release or web build.
 		player = player,
+		world = world,
 	}
 
 	game_hot_reloaded(g)
