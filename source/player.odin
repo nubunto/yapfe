@@ -2,7 +2,7 @@ package game
 
 import rl "vendor:raylib"
 import "core:math/linalg"
-import "core:fmt"
+
 Player :: struct {
 	using character: Character,
 	id: int,

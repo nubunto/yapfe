@@ -3,8 +3,6 @@ package game
 import "base:intrinsics"
 import rl "vendor:raylib"
 import math "core:math"
-import "core:fmt"
-// import "core:reflect"
 
 DEFAULT_DASH_DURATION_FRAMES :: u8(24)
 
@@ -151,10 +149,10 @@ character_draw :: proc(character: Character) {
 }
 
 character_draw_debug :: proc(character: Character) {
-	draw_text_debug(fmt.ctprintf("player_pos: %v", character.position), 1, character.position)
-	draw_text_debug(fmt.ctprintf("player_vel: %v", character.velocity), 2, character.position)
-	draw_text_debug(fmt.ctprintf("player_direction: %v", character.direction), 3, character.position)
-	draw_text_debug(fmt.ctprintf("state: %v", character.state), 4, character.position)
+	draw_text_debug(rl.TextFormat("player_pos: %v", character.position), 1, character.position)
+	draw_text_debug(rl.TextFormat("player_vel: %v", character.velocity), 2, character.position)
+	draw_text_debug(rl.TextFormat("player_direction: %v", character.direction), 3, character.position)
+	draw_text_debug(rl.TextFormat("state: %v", character.state), 4, character.position)
 }
 
 draw_text_debug :: proc(text: cstring, offset: i32, position: [2]f32) {
