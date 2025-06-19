@@ -41,12 +41,14 @@ player_update :: proc(player: ^Player, world: ^World) {
 	}
 }
 
-player_draw :: proc(player: ^Player) {
+player_draw :: proc(player: Player) {
 	character_draw(player.character)
 }
 
-player_draw_debug :: proc(player: ^Player) {
-	rl.DrawText(fmt.ctprintf("player_pos: %v", player.position), 5, 5, 7, rl.YELLOW)
-	rl.DrawText(fmt.ctprintf("player_state: %v", player.state), 5, 15, 7, rl.YELLOW)
-	rl.DrawText(fmt.ctprintf("player_velocity: %v", player.character.velocity), 5, 25, 7, rl.YELLOW)
+player_draw_debug :: proc(player: Player) {
+	character_draw_debug(player)
+	// rl.DrawText(fmt.ctprintf("player_pos: %v", player.position), 5, 5, 1, rl.YELLOW)
+	// rl.DrawText(fmt.ctprintf("player_velocity: %v", player.character.velocity), 5, 15, 1, rl.YELLOW)
+	// rl.DrawText(fmt.ctprintf("player_state: %v", player.state), 5, 25, 1, rl.YELLOW)
+	// rl.DrawText(fmt.ctprintf("character direction: %v", player.direction), 5, 35, 1, rl.YELLOW)
 }

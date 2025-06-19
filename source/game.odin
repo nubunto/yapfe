@@ -66,6 +66,12 @@ update :: proc() {
 		g.run = false
 	}
 
+	// reset player position
+	if rl.IsKeyPressed(.R) {
+		g.player.position = {100, -80}
+		g.player.velocity = {0, 0}
+	}
+
 }
 
 draw :: proc() {
@@ -75,7 +81,8 @@ draw :: proc() {
 	rl.ClearBackground(rl.DARKGRAY)
 
 	draw_with_camera(game_camera(), proc() {
-		character_draw(g.player.character)
+		player_draw_debug(g.player)
+		player_draw(g.player)
 
 		solids_iter := world_make_solids_iterator(&g.world)
 		for solid in world_solids_iter(&solids_iter) {
@@ -85,9 +92,9 @@ draw :: proc() {
 		dynamic_objects_draw(&g.dynamic_objects)
 	})
 
-	draw_with_camera(ui_camera(), proc() {
-		player_draw_debug(&g.player)
-	})
+	// draw_with_camera(ui_camera(), proc() {
+	// 	player_draw_debug(g.player)
+	// })
 }
 
 draw_with_camera :: proc(camera: rl.Camera2D, draw_fn: proc()) {
@@ -122,10 +129,10 @@ game_init :: proc() {
 	character: Character
 	character.stats = Character_Stats {
 		dash_speed = 150,
-		ground_move_speed = 10,
+		running_speed = 160,
 		horizontal_acceleration = 10,
 		horizontal_deceleration = 10,
-		horizontal_friction = 200,
+		horizontal_friction = 700,
 		jump_force = 240,
 		gravity = {0, 600},
 		air_move_speed = 100,
@@ -134,9 +141,9 @@ game_init :: proc() {
 		air_friction = 80,
 		max_fall_speed = 250,
 	}
-	character.position = {50, 0}
+	character.position = {100, -80}
 	character.collision_box = CollisionBox2D {
-		size = {10, 10},
+		size = {10, 15},
 	}
 
 	player := Player {
@@ -162,6 +169,27 @@ game_init :: proc() {
 	})
 	world_push_solid(&world, Solid2D {
 		position = {30, -20},
+		collision_box = CollisionBox2D {
+			size = {50, 10},
+		},
+		collidable = true,
+	})
+	world_push_solid(&world, Solid2D {
+		position = {50, -20},
+		collision_box = CollisionBox2D {
+			size = {50, 10},
+		},
+		collidable = true,
+	})
+	world_push_solid(&world, Solid2D {
+		position = {110, -20},
+		collision_box = CollisionBox2D {
+			size = {50, 10},
+		},
+		collidable = true,
+	})
+	world_push_solid(&world, Solid2D {
+		position = {170, -20},
 		collision_box = CollisionBox2D {
 			size = {50, 10},
 		},
