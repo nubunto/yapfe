@@ -30,12 +30,14 @@ package game
 import rl "vendor:raylib"
 
 PIXEL_WINDOW_HEIGHT :: 180
+frame_by_frame_mode: bool
 
 Game_Memory :: struct {
-	dynamic_objects: Dynamic_Objects,
-	player: Player,
-	world: World,
-	run: bool,
+	dynamic_objects:      Dynamic_Objects,
+	player:               Player,
+	world:                World,
+	run:                  bool,
+	global_frame_counter: u64,
 }
 
 g: ^Game_Memory
@@ -44,23 +46,25 @@ game_camera :: proc() -> rl.Camera2D {
 	w := f32(rl.GetScreenWidth())
 	h := f32(rl.GetScreenHeight())
 
-	return {
-		zoom = h/PIXEL_WINDOW_HEIGHT,
-		target = g.player.position,
-		offset = { w/2, h/2 },
-	}
+	return {zoom = h / PIXEL_WINDOW_HEIGHT, target = g.player.position, offset = {w / 2, h / 2}}
 }
 
 ui_camera :: proc() -> rl.Camera2D {
-	return {
-		zoom = f32(rl.GetScreenHeight())/PIXEL_WINDOW_HEIGHT,
-	}
+	return {zoom = f32(rl.GetScreenHeight()) / PIXEL_WINDOW_HEIGHT}
 }
 
 update :: proc() {
-	player_update(&g.player, &g.world)
+	g.global_frame_counter += 1
 
-	dynamic_objects_update(&g.dynamic_objects)
+	if frame_by_frame_mode {
+		if rl.IsKeyPressed(.F2) {
+			player_update(&g.player, &g.world, g.global_frame_counter)
+			dynamic_objects_update(&g.dynamic_objects)
+		}
+	} else {
+		player_update(&g.player, &g.world, g.global_frame_counter)
+		dynamic_objects_update(&g.dynamic_objects)
+	}
 
 	if rl.IsKeyPressed(.ESCAPE) {
 		g.run = false
@@ -72,6 +76,10 @@ update :: proc() {
 		g.player.velocity = {0, 0}
 	}
 
+	if rl.IsKeyPressed(.F1) {
+		frame_by_frame_mode = !frame_by_frame_mode
+	}
+
 }
 
 draw :: proc() {
@@ -81,7 +89,7 @@ draw :: proc() {
 	rl.ClearBackground(rl.DARKGRAY)
 
 	draw_with_camera(game_camera(), proc() {
-		player_draw_debug(g.player)
+		player_draw_debug(&g.player)
 		player_draw(g.player)
 
 		solids_iter := world_make_solids_iterator(&g.world)
@@ -92,9 +100,12 @@ draw :: proc() {
 		dynamic_objects_draw(&g.dynamic_objects)
 	})
 
-	// draw_with_camera(ui_camera(), proc() {
-	// 	player_draw_debug(g.player)
-	// })
+	draw_with_camera(ui_camera(), proc() {
+		rl.DrawFPS(3, 5)
+		if frame_by_frame_mode {
+			rl.DrawText("Frame by frame mode", 3, 20, 2, rl.WHITE)
+		}
+	})
 }
 
 draw_with_camera :: proc(camera: rl.Camera2D, draw_fn: proc()) {
@@ -118,7 +129,7 @@ game_init_window :: proc() {
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
 	rl.InitWindow(1280, 720, "Odin + Raylib + Hot Reload template!")
 	rl.SetWindowPosition(200, 200)
-	rl.SetTargetFPS(500)
+	rl.SetTargetFPS(120)
 	rl.SetExitKey(nil)
 }
 
@@ -128,22 +139,21 @@ game_init :: proc() {
 
 	character: Character
 	character.stats = Character_Stats {
-		dash_speed = 150,
-		running_speed = 160,
-		horizontal_acceleration = 10,
-		horizontal_deceleration = 10,
-		horizontal_friction = 700,
-		jump_force = 240,
-		gravity = {0, 600},
-		air_move_speed = 100,
-		air_acceleration = 80,
-		air_deceleration = 80,
-		air_friction = 80,
-		max_fall_speed = 250,
+		dash_speed               = 150,
+		running_speed            = 170,
+		horizontal_acceleration  = 10,
+		horizontal_friction      = 600,
+		jump_force               = 240,
+		gravity                  = {0, 500},
+		air_move_speed           = 120,
+		air_acceleration         = 90,
+		air_friction             = 10,
+		max_horizontal_air_speed = 160,
+		max_fall_speed           = 250,
 	}
 	character.position = {100, -80}
 	character.collision_box = CollisionBox2D {
-		size = {10, 15},
+		size = {13, 20},
 	}
 
 	player := Player {
@@ -153,60 +163,67 @@ game_init :: proc() {
 	world: World
 
 	world_push_actor(&world, character.actor)
-	world_push_solid(&world, Solid2D {
-		position = {-10, -20},
-		collision_box = CollisionBox2D {
-			size = {50, 10},
+	world_push_solid(
+		&world,
+		Solid2D {
+			position = {-10, -20},
+			collision_box = CollisionBox2D{size = {50, 10}},
+			collidable = true,
 		},
-		collidable = true,
-	})
-	world_push_solid(&world, Solid2D {
-		position = {10, -20},
-		collision_box = CollisionBox2D {
-			size = {50, 10},
+	)
+	world_push_solid(
+		&world,
+		Solid2D {
+			position = {10, -20},
+			collision_box = CollisionBox2D{size = {50, 10}},
+			collidable = true,
 		},
-		collidable = true,
-	})
-	world_push_solid(&world, Solid2D {
-		position = {30, -20},
-		collision_box = CollisionBox2D {
-			size = {50, 10},
+	)
+	world_push_solid(
+		&world,
+		Solid2D {
+			position = {30, -20},
+			collision_box = CollisionBox2D{size = {50, 10}},
+			collidable = true,
 		},
-		collidable = true,
-	})
-	world_push_solid(&world, Solid2D {
-		position = {50, -20},
-		collision_box = CollisionBox2D {
-			size = {50, 10},
+	)
+	world_push_solid(
+		&world,
+		Solid2D {
+			position = {50, -20},
+			collision_box = CollisionBox2D{size = {50, 10}},
+			collidable = true,
 		},
-		collidable = true,
-	})
-	world_push_solid(&world, Solid2D {
-		position = {110, -20},
-		collision_box = CollisionBox2D {
-			size = {50, 10},
+	)
+	world_push_solid(
+		&world,
+		Solid2D {
+			position = {110, -20},
+			collision_box = CollisionBox2D{size = {50, 10}},
+			collidable = true,
 		},
-		collidable = true,
-	})
-	world_push_solid(&world, Solid2D {
-		position = {170, -20},
-		collision_box = CollisionBox2D {
-			size = {50, 10},
+	)
+	world_push_solid(
+		&world,
+		Solid2D {
+			position = {170, -20},
+			collision_box = CollisionBox2D{size = {50, 10}},
+			collidable = true,
 		},
-		collidable = true,
-	})
-	world_push_solid(&world, Solid2D {
-		position = {10, 20},
-		collision_box = CollisionBox2D {
-			size = {1000, 10},
+	)
+	world_push_solid(
+		&world,
+		Solid2D {
+			position = {10, 20},
+			collision_box = CollisionBox2D{size = {1000, 10}},
+			collidable = true,
 		},
-		collidable = true,
-	})
+	)
 
 	g^ = Game_Memory {
-		run = true,
+		run    = true,
 		player = player,
-		world = world,
+		world  = world,
 	}
 
 	game_hot_reloaded(g)

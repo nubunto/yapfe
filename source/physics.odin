@@ -7,6 +7,7 @@ import math "core:math"
 World :: struct {
     actors: sa.Small_Array(8, Actor2D),
     solids: sa.Small_Array(256, Solid2D),
+    sensors: sa.Small_Array(128, Sensor2D),
 }
 
 world_push_actor :: proc(world: ^World, actor: Actor2D) {
@@ -78,16 +79,43 @@ Actor2D :: struct {
     position: rl.Vector2,
     remainder: rl.Vector2,
     collision_box: CollisionBox2D,
+
+    // if true, the actor will ignore solids
+    non_collidable: bool,
 }
 
-CollisionInfo :: struct {
+SolidCollisionInfo :: struct {
     solid: Solid2D,
     direction: rl.Vector2,
 }
 
-CollisionCallback :: proc()
+SensorCollisionInfo :: struct {
+    sensor: Sensor2D,
+    direction: rl.Vector2,
+}
 
-actor_move_x :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> Maybe(CollisionInfo) {
+NoCollision :: struct {}
+
+CollisionInfo :: union {
+    NoCollision,
+    SolidCollisionInfo,
+    SensorCollisionInfo,
+}
+
+collision_info_stops_movement :: proc(cinfo: CollisionInfo) -> bool {
+    switch v in cinfo {
+    case NoCollision:
+        return false
+    case SensorCollisionInfo:
+        return false
+    case SolidCollisionInfo:
+        return true
+    case:
+        return false
+    }
+}
+
+actor_move_x :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> CollisionInfo {
     actor.remainder.x += amount
 
     move_pixels := math.round(actor.remainder.x)
@@ -100,7 +128,13 @@ actor_move_x :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> Maybe(Colli
     sign := math.sign(move_pixels)
     move_pixels_int := int(move_pixels)
     for _ in 0..<abs(move_pixels_int) {
-        if cinfo, ok := actor_check_collision(actor, sa.slice(&world.solids), f32(sign), 0.0).?; ok {
+        if actor.non_collidable {
+            actor.position.x += sign
+            continue
+        }
+
+        cinfo := actor_check_collision(actor, sa.slice(&world.solids), f32(sign), 0.0)
+        if collision_info_stops_movement(cinfo) {
             return cinfo
         }
 
@@ -110,7 +144,7 @@ actor_move_x :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> Maybe(Colli
     return nil
 }
 
-actor_move_y :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> Maybe(CollisionInfo) {
+actor_move_y :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> CollisionInfo {
     actor.remainder.y += amount
     move_pixels := math.round(actor.remainder.y)
     if move_pixels == 0 {
@@ -122,7 +156,14 @@ actor_move_y :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> Maybe(Colli
     sign := math.sign(move_pixels)
     move_pixels_int := int(move_pixels)
     for _ in 0..<abs(move_pixels_int) {
-        if cinfo, ok := actor_check_collision(actor, sa.slice(&world.solids), 0.0, f32(sign)).?; ok {
+        // move like there is no tomorrow!
+        if actor.non_collidable {
+            actor.position.y += sign
+            continue
+        }
+
+        cinfo := actor_check_collision(actor, sa.slice(&world.solids), 0.0, f32(sign))
+        if collision_info_stops_movement(cinfo) {
             return cinfo
         }
 
@@ -132,7 +173,7 @@ actor_move_y :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> Maybe(Colli
     return nil
 }
 
-actor_check_collision :: proc(actor: ^Actor2D, solids: []Solid2D, dx: f32, dy: f32) -> Maybe(CollisionInfo) {
+actor_solid_check_collision :: proc(actor: ^Actor2D, solids: []Solid2D, dx: f32, dy: f32) -> CollisionInfo {
     actor_future_rect := collision_box_rect(actor.position, actor.collision_box)
     actor_future_rect.x += dx
     actor_future_rect.y += dy
@@ -143,7 +184,7 @@ actor_check_collision :: proc(actor: ^Actor2D, solids: []Solid2D, dx: f32, dy: f
         }
 
         if rl.CheckCollisionRecs(actor_future_rect, collision_box_rect(solid.position, solid.collision_box)) {
-            return CollisionInfo {
+            return SolidCollisionInfo {
                 solid = solid,
                 direction = {dx, dy},
             }
@@ -179,13 +220,15 @@ Solid2D :: struct {
     collidable: bool,
 }
 
+
 // returns a list of actors riding a given solid
 // caller should delete the returned array
-get_actors_riding :: proc(solid: Solid2D, actors: []Actor2D) -> (ret: [dynamic]Actor2D) {
-    ret = make([dynamic]Actor2D, 0, len(actors), context.temp_allocator)
-    for &actor in actors {
+// uses the temp allocator to create a slice of all the riding actors
+get_actors_riding :: proc(solid: Solid2D, actors: []Actor2D, allocator := context.temp_allocator, loc := #caller_location) -> (ret: []Actor2D) {
+    ret = make([]Actor2D, len(actors), context.temp_allocator, loc)
+    for &actor, i in actors {
         if actor_is_riding(&actor, solid) {
-            append(&ret, actor)
+            ret[i] = actor
         }
     }
     return
@@ -256,7 +299,6 @@ solid_move_y :: proc(solid: ^Solid2D, world: ^World, amount: f32) {
     solid.position.y += f32(move_y)
 
     riding_actors := get_actors_riding(solid^, sa.slice(&world.actors))
-    defer delete(riding_actors)
 
     solid.collidable = false
     defer { solid.collidable = true }
@@ -289,3 +331,28 @@ solid_move_y :: proc(solid: ^Solid2D, world: ^World, amount: f32) {
 }
 
 
+// kind of like a solid, but doesn't block movement
+Sensor2D :: struct {
+    position: rl.Vector2,
+    collision_box: CollisionBox2D,
+}
+
+actor_sensor_check_collision :: proc(actor: ^Actor2D, sensors: []Sensor2D, dx: f32, dy: f32) -> CollisionInfo {
+    actor_future_rect := collision_box_rect(actor.position, actor.collision_box)
+    actor_future_rect.x += dx
+    actor_future_rect.y += dy
+
+    for sensor in sensors {
+        if rl.CheckCollisionRecs(actor_future_rect, collision_box_rect(sensor.position, sensor.collision_box)) {
+            return SensorCollisionInfo {
+                sensor = sensor,
+                direction = {dx, dy},
+            }
+        }
+    }
+
+    return nil
+}
+
+
+actor_check_collision :: proc{actor_sensor_check_collision, actor_solid_check_collision}

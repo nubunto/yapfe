@@ -3,29 +3,24 @@ package game
 import "base:intrinsics"
 import rl "vendor:raylib"
 import math "core:math"
+import sa "core:container/small_array"
 
 DEFAULT_DASH_DURATION_FRAMES :: u8(24)
+DEFAULT_JUMPSQUAT_FRAMES :: u8(5)
 
 Character_Stats :: struct {
     running_speed: f32,
     walking_speed: f32,
     dash_speed: f32,
     horizontal_acceleration: f32,
-    horizontal_deceleration: f32,
     horizontal_friction: f32,
     jump_force: f32,
+    max_horizontal_air_speed: f32,
     air_move_speed: f32,
     air_acceleration: f32,
-    air_deceleration: f32,
     air_friction: f32,
-    gravity: rl.Vector2,
     max_fall_speed: f32,
-}
-
-Current_Stats :: struct {
-    max_h_speed: f32,
-    h_accel: f32,
-    h_friction: f32,
+    gravity: rl.Vector2,
 }
 
 Character_Default_State :: union #no_nil {
@@ -33,6 +28,8 @@ Character_Default_State :: union #no_nil {
     Character_State_Walking,
     Character_State_Dash,
     Character_State_Running,
+    Character_State_Aerial,
+    Character_State_Jumpsquat,
     // more to come!
 }
 
@@ -43,6 +40,17 @@ Character_State_Walking :: struct {
 }
 
 Character_State_Running :: struct {
+}
+
+Character_State_Jumpsquat :: struct {
+    jumpsquat_frames: u8,
+}
+
+Character_State_Aerial :: struct {
+}
+
+init_state_jumpsquat :: proc(js_frames := DEFAULT_JUMPSQUAT_FRAMES) -> Character_State_Jumpsquat {
+    return { jumpsquat_frames = js_frames }
 }
 
 Character_State_Dash :: struct {
@@ -71,45 +79,74 @@ apply_gravity :: proc(character: ^Character, world: ^World) {
     }
 }
 
+apply_friction :: proc(character: ^Character, friction: f32) {
+    character.velocity.x = move_towards(character.velocity.x, 0, friction * rl.GetFrameTime())
+}
+
 character_try_jump :: proc(character: ^Character, world: ^World) {
     if actor_is_on_floor(&character.actor, world) {
-        character.velocity.y = -character.stats.jump_force
+        character.state = init_state_jumpsquat()
     }
 }
 
-character_idle_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, stats: Current_Stats) {
-    if input.x != 0 {
-        if character.is_grounded {
-            character.state = init_state_dash()
-        } else {
-            // character.state = Character_State_Walking {
-            //     direction = i8(math.sign(input.x)),
-            // }
-        }
-    } else {
-        character.velocity.x = move_towards(character.velocity.x, 0, stats.h_friction * rl.GetFrameTime())
+character_idle_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, buffer: ^sa.Small_Array($N, Buffered_Input)) {
+    if !actor_is_on_floor(character, world) {
+        character.state = Character_State_Aerial{}
+        return
     }
 
-    apply_gravity(character, world)
+    if player_was_action_pressed_consume(buffer, Action_Jump{}) {
+        character_try_jump(character, world)
+        return
+    }
+
+    defer apply_gravity(character, world)
+
+    if input.x == 0 {
+        apply_friction(character, character.is_grounded ? character.stats.horizontal_friction : character.stats.air_friction)
+        return
+    }
+
+    character.state = init_state_dash()
 }
 
-character_walking_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, stats: Current_Stats) {
+character_walking_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, buffer: ^sa.Small_Array($N, Buffered_Input)) {
+    _, ok := &character.state.(Character_State_Walking)
+    if !ok {
+        return
+    }
+
+    if player_was_action_pressed_consume(buffer, Action_Jump{}) {
+        character_try_jump(character, world)
+        return
+    }
     if input.x == 0 {
         character.state = Character_State_Idle{}
+        return
     }
 
-    character.velocity.x = move_towards(character.velocity.x, input.x * stats.max_h_speed, stats.h_accel * rl.GetFrameTime())
+    character.velocity.x = move_towards(character.velocity.x, input.x * character.stats.walking_speed, character.stats.horizontal_acceleration * rl.GetFrameTime())
     apply_gravity(character, world)
 }
 
-character_running_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, stats: Current_Stats) {
+character_running_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, buffer: ^sa.Small_Array($N, Buffered_Input)) {
     _, ok := &character.state.(Character_State_Running)
     if !ok {
         return
     }
 
-    max_h_speed := stats.max_h_speed
-    h_accel := stats.h_accel
+    if !actor_is_on_floor(character, world) {
+        character.state = Character_State_Aerial{}
+        return
+    }
+
+    if player_was_action_pressed_consume(buffer, Action_Jump{}) {
+        character_try_jump(character, world)
+        return
+    }
+
+
+    max_h_speed := character.stats.running_speed
 
     if character.direction_last_frame != character.direction && character.direction != 0 {
         character.state = init_state_dash()
@@ -120,18 +157,23 @@ character_running_state :: proc(character: ^Character, world: ^World, input: rl.
         return
     }
 
-    character.velocity.x = move_towards(character.velocity.x, (input.x * max_h_speed), h_accel * rl.GetFrameTime())
+    character.velocity.x = move_towards(character.velocity.x, (input.x * max_h_speed), character.stats.horizontal_acceleration * rl.GetFrameTime())
     apply_gravity(character, world)
 }
 
-character_dash_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, stats: Current_Stats) {
+character_dash_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, buffer: ^sa.Small_Array($N, Buffered_Input)) {
+    state, ok := &character.state.(Character_State_Dash)
+    if !ok {
+        return
+    }
+
     if input.x == 0 {
         character.state = Character_State_Idle{}
         return
     }
 
-    state, ok := &character.state.(Character_State_Dash)
-    if !ok {
+    if player_was_action_pressed_consume(buffer, Action_Jump{}) {
+        character_try_jump(character, world)
         return
     }
 
@@ -144,11 +186,76 @@ character_dash_state :: proc(character: ^Character, world: ^World, input: rl.Vec
     apply_gravity(character, world)
 }
 
+character_jumpsquat_state ::  proc(character: ^Character, world: ^World, input: rl.Vector2, buffer: ^sa.Small_Array($N, Buffered_Input)) {
+    state, state_ok := &character.state.(Character_State_Jumpsquat)
+    if !state_ok {
+        return
+    }
+
+    if state.jumpsquat_frames <= 0 {
+        character.velocity.y = -character.stats.jump_force
+        character.non_collidable = true
+        character.state = Character_State_Aerial{}
+        return
+    }
+
+    state.jumpsquat_frames = max(state.jumpsquat_frames - 1, 0)
+}
+
+character_aerial_state :: proc(character: ^Character, world: ^World, input: rl.Vector2, buffer: ^sa.Small_Array($N, Buffered_Input)) {
+    _, state_ok := &character.state.(Character_State_Aerial)
+    if !state_ok {
+        return
+    }
+
+    if input.x == 0 {
+        apply_friction(character, character.stats.air_friction)
+    } else {
+        character.velocity.x = move_towards(character.velocity.x, input.x * character.stats.max_horizontal_air_speed, character.stats.air_move_speed * rl.GetFrameTime())
+    }
+
+    apply_gravity(character, world)
+
+    if character.velocity.y >= 0 {
+        character.non_collidable = false
+        if actor_is_on_floor(character, world) {
+            character.state = Character_State_Idle{}
+        }
+    }
+}
+
 character_draw :: proc(character: Character) {
-	rl.DrawRectangleV(character.position, character.collision_box.size, rl.RED)
+    #partial switch state in character.state {
+    case Character_State_Jumpsquat:
+        // //
+        // if state.jumpsquat_frames <= 0 {
+        //     rl.DrawRectangleV(character.position, character.collision_box.size, rl.RED)
+        //     break
+        // }
+
+        // poor man's stretch and squash
+        progress := 1.0 - (f32(state.jumpsquat_frames) / f32(DEFAULT_JUMPSQUAT_FRAMES))
+
+        original_size := character.collision_box.size
+        // squash to be wider and shorter
+        squashed_size := rl.Vector2{original_size.x * 2.3, original_size.y * 0.3}
+
+        current_size := vector2_lerp(original_size, squashed_size, progress)
+
+        // adjust position to keep the base of the character on the same spot
+        draw_pos := rl.Vector2{
+            character.position.x - (current_size.x - original_size.x) / 2,
+            character.position.y + (original_size.y - current_size.y),
+        }
+
+        rl.DrawRectangleV(draw_pos, current_size, rl.RED)
+    case:
+        rl.DrawRectangleV(character.position, character.collision_box.size, rl.RED)
+    }
 }
 
 character_draw_debug :: proc(character: Character) {
+	draw_text_debug(rl.TextFormat("input: %v", player_get_input()), 0, character.position)
 	draw_text_debug(rl.TextFormat("player_pos: %v", character.position), 1, character.position)
 	draw_text_debug(rl.TextFormat("player_vel: %v", character.velocity), 2, character.position)
 	draw_text_debug(rl.TextFormat("player_direction: %v", character.direction), 3, character.position)
@@ -157,7 +264,7 @@ character_draw_debug :: proc(character: Character) {
 
 draw_text_debug :: proc(text: cstring, offset: i32, position: [2]f32) {
     offset_y := offset * 10
-    start_of_region: [2]i32 = { i32(position.x - 45), i32(position.y - 45) }
+    start_of_region: [2]i32 = { i32(position.x - 145), i32(position.y - 45) }
 
 	rl.DrawText(text, start_of_region.x, start_of_region.y + offset_y, 1, rl.YELLOW)
 	rl.DrawText(text, start_of_region.x, start_of_region.y + offset_y, 1, rl.YELLOW)
@@ -170,42 +277,41 @@ character_spawn_fireball :: proc(character: ^Character, objects: ^Dynamic_Object
 	})
 }
 
-character_update :: proc(character: ^Character, world: ^World, input: rl.Vector2) {
+character_update :: proc(character: ^Character, world: ^World, input: rl.Vector2, buffer: ^sa.Small_Array($N, Buffered_Input)) {
     dt := rl.GetFrameTime()
     character.is_grounded = actor_is_on_floor(&character.actor, world)
     character.direction_last_frame = character.direction
     character.direction = i8(math.sign(input.x))
 
-    current_stats := Current_Stats {
-        max_h_speed = character.stats.running_speed,
-        h_accel = character.stats.horizontal_acceleration,
-        h_friction = character.stats.horizontal_friction,
-    }
-
-    if !character.is_grounded {
-        current_stats.max_h_speed = character.stats.air_move_speed
-        current_stats.h_accel = character.stats.air_acceleration
-        current_stats.h_friction = character.stats.air_friction
-    }
-
     switch state in character.state {
     case Character_State_Idle:
-        character_idle_state(character, world, input, current_stats)
+        character_idle_state(character, world, input, buffer)
     case Character_State_Walking:
-        character_walking_state(character, world, input, current_stats)
+        character_walking_state(character, world, input, buffer)
     case Character_State_Dash:
-        character_dash_state(character, world, input, current_stats)
+        character_dash_state(character, world, input, buffer)
     case Character_State_Running:
-        character_running_state(character, world, input, current_stats)
+        character_running_state(character, world, input, buffer)
+    case Character_State_Aerial:
+        character_aerial_state(character, world, input, buffer)
+    case Character_State_Jumpsquat:
+        character_jumpsquat_state(character, world, input, buffer)
     }
 
     character.velocity.y = min(character.velocity.y, character.stats.max_fall_speed)
 
-    if _, ok := actor_move_x(&character.actor, world, character.velocity.x * dt).?; ok {
+    if cinfo := actor_move_x(&character.actor, world, character.velocity.x * dt); collision_info_stops_movement(cinfo) {
         character.velocity.x = 0
     }
-    if _, ok := actor_move_y(&character.actor, world, character.velocity.y * dt).?; ok {
+    if cinfo := actor_move_y(&character.actor, world, character.velocity.y * dt); collision_info_stops_movement(cinfo) {
         character.velocity.y = 0
+    }
+}
+
+vector2_lerp :: proc(a, b: rl.Vector2, t: f32) -> rl.Vector2 {
+    return {
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t,
     }
 }
 
