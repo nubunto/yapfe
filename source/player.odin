@@ -1,16 +1,15 @@
 package game
 
-import rl "vendor:raylib"
 import sa "core:container/small_array"
 import "core:fmt"
 import "core:math/linalg"
+import rl "vendor:raylib"
 
 Player :: struct {
 	using character: Character,
-	id: int,
-
-	current_input: Action,
-	input_buffer: sa.Small_Array(256, Buffered_Input),
+	id:              int,
+	current_input:   Action,
+	input_buffer:    sa.Small_Array(256, Buffered_Input),
 }
 
 Action_Input :: struct {
@@ -19,15 +18,18 @@ Action_Input :: struct {
 
 Action_Jump :: struct {}
 
+Action_Attack :: struct {}
+
 Action :: union {
 	Action_Input,
 	Action_Jump,
+	Action_Attack,
 }
 
 Buffered_Input :: struct {
-	action: Action,
+	action:        Action,
 	frame_created: u64,
-	is_consumed: bool,
+	is_consumed:   bool,
 }
 
 Input_State :: struct {
@@ -53,7 +55,11 @@ player_get_input :: proc() -> rl.Vector2 {
 	return input
 }
 
-player_update_buffer :: proc(player: ^Player, current_frame: u64, buffer_duration_frames: u64) {
+player_invalidate_buffer :: proc(
+	player: ^Player,
+	current_frame: u64,
+	buffer_duration_frames: u64,
+) {
 	// invalidate old inputs
 	for i := sa.len(player.input_buffer) - 1; i >= 0; i -= 1 {
 		buffered_input := sa.get(player.input_buffer, i)
@@ -63,16 +69,19 @@ player_update_buffer :: proc(player: ^Player, current_frame: u64, buffer_duratio
 	}
 }
 
-player_buffer_input :: proc(player: ^Player, action: Action, current_frame: u64) {
+player_buffer_new_input :: proc(player: ^Player, action: Action, current_frame: u64) {
 	new_buffered_input := Buffered_Input {
-		action = action,
+		action        = action,
 		frame_created = current_frame,
-		is_consumed = false,
+		is_consumed   = false,
 	}
 	sa.push(&player.input_buffer, new_buffered_input)
 }
 
-player_was_action_pressed_consume :: proc(buffer: ^sa.Small_Array($N, Buffered_Input), action: Action) -> bool {
+player_was_action_pressed_consume :: proc(
+	buffer: ^sa.Small_Array($N, Buffered_Input),
+	action: Action,
+) -> bool {
 	for i := sa.len(buffer^) - 1; i >= 0; i -= 1 {
 		buffered_input, ok := sa.get_ptr_safe(buffer, i)
 		if !ok {
@@ -86,24 +95,31 @@ player_was_action_pressed_consume :: proc(buffer: ^sa.Small_Array($N, Buffered_I
 	return false
 }
 
-
-player_update :: proc(player: ^Player, world: ^World, frame: u64) {
+player_buffer_inputs :: proc(player: ^Player, frame: u64) {
 	input := player_get_input()
 	if linalg.length(input) > 1 {
-		player_buffer_input(player, Action_Input { vector = input }, frame)
-	}
-
-	character_update(&player.character, world, input, &player.input_buffer)
-
-	if rl.IsKeyPressed(.F) {
-		character_spawn_fireball(&player.character, &g.dynamic_objects)
+		player_buffer_new_input(player, Action_Input{vector = input}, frame)
 	}
 
 	if rl.IsKeyPressed(.SPACE) {
-		player_buffer_input(player, Action_Jump {}, frame)
+		player_buffer_new_input(player, Action_Jump{}, frame)
 	}
 
-	player_update_buffer(player, frame, 6)
+	if rl.IsKeyPressed(.F) {
+		player_buffer_new_input(player, Action_Attack{}, frame)
+	}
+}
+
+player_update :: proc(player: ^Player, world: ^World, frame: u64) {
+	input := player_get_input()
+	character_update(&player.character, world, input, &player.input_buffer)
+
+	if rl.IsKeyPressed(.F) {
+		// character_spawn_fireball(&player.character, &g.dynamic_objects)
+
+	}
+
+
 }
 
 player_draw :: proc(player: Player) {

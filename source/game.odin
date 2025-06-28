@@ -54,16 +54,21 @@ ui_camera :: proc() -> rl.Camera2D {
 }
 
 update :: proc() {
-	g.global_frame_counter += 1
+
+	player_buffer_inputs(&g.player, g.global_frame_counter)
 
 	if frame_by_frame_mode {
 		if rl.IsKeyPressed(.F2) {
+			g.global_frame_counter += 1
 			player_update(&g.player, &g.world, g.global_frame_counter)
 			dynamic_objects_update(&g.dynamic_objects)
+			player_invalidate_buffer(&g.player, g.global_frame_counter, 6)
 		}
 	} else {
+		g.global_frame_counter += 1
 		player_update(&g.player, &g.world, g.global_frame_counter)
 		dynamic_objects_update(&g.dynamic_objects)
+		player_invalidate_buffer(&g.player, g.global_frame_counter, 6)
 	}
 
 	if rl.IsKeyPressed(.ESCAPE) {
@@ -145,7 +150,6 @@ game_init :: proc() {
 		horizontal_friction      = 600,
 		jump_force               = 240,
 		gravity                  = {0, 500},
-		air_move_speed           = 120,
 		air_acceleration         = 90,
 		air_friction             = 10,
 		max_horizontal_air_speed = 160,
@@ -154,6 +158,20 @@ game_init :: proc() {
 	character.position = {100, -80}
 	character.collision_box = CollisionBox2D {
 		size = {13, 20},
+	}
+	character.attacks = [Character_Attack_ID]Character_Attack_Definition{
+		.Normal = Character_Attack_Definition{
+			stats = {
+				startup_frames = 5,
+				active_frames = 2,
+				recovery_frames = 8,
+			},
+			offset = {15, 0},
+			collision = {
+				size = {10, 10},
+			},
+		},
+		.Special = Character_Attack_Definition{},
 	}
 
 	player := Player {
