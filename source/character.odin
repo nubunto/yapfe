@@ -5,7 +5,7 @@ import sa "core:container/small_array"
 import math "core:math"
 import rl "vendor:raylib"
 
-DEFAULT_DASH_DURATION_FRAMES :: u8(24)
+DEFAULT_DASH_DURATION_FRAMES :: u8(14)
 DEFAULT_JUMPSQUAT_FRAMES :: u8(5)
 
 Character_Stats :: struct {
@@ -57,21 +57,23 @@ Attack_State :: enum {
 }
 
 Attack_Stats :: struct {
-	startup_frames: uint,
-	active_frames: uint,
+	startup_frames:  uint,
+	active_frames:   uint,
 	recovery_frames: uint,
 }
 
 Character_State_NormalAttack :: struct {
-	current_state: Attack_State,
+	current_state:         Attack_State,
 	current_frame_counter: uint,
-	stats: Attack_Stats,
-	collision_box: CollisionBox2D,
-	position_offset: rl.Vector2,
+	stats:                 Attack_Stats,
+	collision_box:         CollisionBox2D,
+	position_offset:       rl.Vector2,
 }
 
-init_state_jumpsquat :: proc(js_frames := DEFAULT_JUMPSQUAT_FRAMES) -> Character_State_Jumpsquat {
-	return {jumpsquat_frames = js_frames}
+init_state_jumpsquat :: proc(
+	jumpsquat_frames := DEFAULT_JUMPSQUAT_FRAMES,
+) -> Character_State_Jumpsquat {
+	return {jumpsquat_frames = jumpsquat_frames}
 }
 
 Character_State_Dash :: struct {
@@ -83,8 +85,8 @@ init_state_dash :: proc(duration := DEFAULT_DASH_DURATION_FRAMES) -> Character_S
 }
 
 Character_Attack_Definition :: struct {
-	stats: Attack_Stats,
-	offset: rl.Vector2,
+	stats:     Attack_Stats,
+	offset:    rl.Vector2,
 	collision: CollisionBox2D,
 }
 
@@ -96,7 +98,7 @@ Character :: struct {
 	direction:            i8,
 	direction_last_frame: i8,
 	is_grounded:          bool,
-	attacks: 			  [Character_Attack_ID]Character_Attack_Definition,
+	attacks:              [Character_Attack_ID]Character_Attack_Definition,
 }
 
 apply_gravity :: proc(character: ^Character, world: ^World) {
@@ -121,36 +123,45 @@ character_idle_state :: proc(
 	input: rl.Vector2,
 	buffer: ^sa.Small_Array($N, Buffered_Input),
 ) {
+	direction := math.sign(input.x)
+	if direction != 0 {
+		character.direction = i8(direction)
+	}
+
 	if !actor_is_on_floor(character, world) {
 		character.state = Character_State_Aerial{}
 		return
 	}
 
-	if player_was_action_pressed_consume(buffer, Action_Jump{}) {
+	if _, jumped := player_was_action_pressed_consume(buffer, Action_Jump{}); jumped {
 		character_try_jump(character, world)
 		return
 	}
 
-	if player_was_action_pressed_consume(buffer, Action_Attack{}) {
-		character.state = Character_State_NormalAttack{
-			current_frame_counter = character.attacks[.Normal].stats.startup_frames,
-			stats = character.attacks[.Normal].stats,
-			collision_box = character.attacks[.Normal].collision,
-			position_offset = character.attacks[.Normal].offset,
+	if input.y == 1 {
+		// TODO: platdrop
+		character.non_collidable = true
+	}
+
+	if _, attacked := player_was_action_pressed_consume(buffer, Action_Attack{}); attacked {
+		character_attack := character.attacks[.Normal]
+		character.state = Character_State_NormalAttack {
+			current_frame_counter = character_attack.stats.startup_frames,
+			stats                 = character_attack.stats,
+			collision_box         = character_attack.collision,
+			position_offset       = character_attack.offset,
 		}
 	}
 
-	defer apply_gravity(character, world)
+	apply_gravity(character, world)
 
 	if input.x == 0 {
-		apply_friction(
-			character,
-			character.is_grounded ? character.stats.horizontal_friction : character.stats.air_friction,
-		)
-		return
+		friction :=
+			character.is_grounded ? character.stats.horizontal_friction : character.stats.air_friction
+		apply_friction(character, friction)
+	} else {
+		character.state = init_state_dash()
 	}
-
-	character.state = init_state_dash()
 }
 
 character_walking_state :: proc(
@@ -164,7 +175,7 @@ character_walking_state :: proc(
 		return
 	}
 
-	if player_was_action_pressed_consume(buffer, Action_Jump{}) {
+	if _, jumped := player_was_action_pressed_consume(buffer, Action_Jump{}); jumped {
 		character_try_jump(character, world)
 		return
 	}
@@ -197,11 +208,10 @@ character_running_state :: proc(
 		return
 	}
 
-	if player_was_action_pressed_consume(buffer, Action_Jump{}) {
+	if _, jumped := player_was_action_pressed_consume(buffer, Action_Jump{}); jumped {
 		character_try_jump(character, world)
 		return
 	}
-
 
 	max_h_speed := character.stats.running_speed
 
@@ -238,7 +248,7 @@ character_dash_state :: proc(
 		return
 	}
 
-	if player_was_action_pressed_consume(buffer, Action_Jump{}) {
+	if _, jumped := player_was_action_pressed_consume(buffer, Action_Jump{}); jumped {
 		character_try_jump(character, world)
 		return
 	}
@@ -324,11 +334,11 @@ character_normalattack_state :: proc(
 			state.current_frame_counter = state.stats.active_frames
 		}
 	case Attack_State.Active:
+		// TODO: draw stuff and check for collisions
 		if state.current_frame_counter == 0 {
 			state.current_state = Attack_State.Recovery
 			state.current_frame_counter = state.stats.recovery_frames
 		}
-		// TODO: draw stuff and check for collisions
 	case Attack_State.Recovery:
 		// TODO: no longer check for collision and draw stuff
 		if state.current_frame_counter <= 0 {
@@ -363,14 +373,24 @@ character_draw :: proc(character: Character) {
 
 		rl.DrawRectangleV(draw_pos, current_size, rl.RED)
 	case Character_State_NormalAttack:
-		attack_pos := character.position + state.position_offset
+		flipped := rl.Vector2 {
+			f32(character.direction) * state.position_offset.x,
+			state.position_offset.y,
+		}
+		attack_pos := character.position + flipped
 		rl.DrawRectangleV(character.position, character.collision_box.size, rl.RED)
 		rl.DrawRectangleV(attack_pos, state.collision_box.size, rl.PURPLE)
 	case:
+		flipped := rl.Vector2{f32(character.direction) * 15, 0}
+		character_center := rl.Vector2 {
+			character.position.x + (character.collision_box.size.x / 2),
+			character.position.y + (character.collision_box.size.y / 2),
+		}
 		rl.DrawRectangleV(character.position, character.collision_box.size, rl.RED)
-		// TODO: figure out how to draw a small direction indicator
-		// too sleepy for this shit
-		// rl.DrawRectangleV({ character.position.x * f32(character.direction), character.position.y}, {15, 2}, rl.LIME)
+		rl.DrawRectangleV(character_center + flipped, {7, 7}, rl.GREEN)
+	// TODO: figure out how to draw a small direction indicator
+	// too sleepy for this shit
+	// rl.DrawRectangleV({ character.position.x * f32(character.direction), character.position.y}, {15, 2}, rl.LIME)
 	}
 }
 
@@ -408,11 +428,6 @@ character_update :: proc(
 	character.is_grounded = actor_is_on_floor(&character.actor, world)
 	character.direction_last_frame = character.direction
 
-	direction := math.sign(input.x)
-	if direction != 0 {
-		character.direction = i8(direction)
-	}
-
 	switch state in character.state {
 	case Character_State_Idle:
 		character_idle_state(character, world, input, buffer)
@@ -430,6 +445,10 @@ character_update :: proc(
 		character_normalattack_state(character, world, input, buffer)
 	}
 
+	apply_velocity(character, world, dt)
+}
+
+apply_velocity :: proc(character: ^Character, world: ^World, dt: f32) {
 	character.velocity.y = min(character.velocity.y, character.stats.max_fall_speed)
 
 	if cinfo := actor_move_x(&character.actor, world, character.velocity.x * dt);

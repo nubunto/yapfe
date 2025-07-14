@@ -54,7 +54,6 @@ ui_camera :: proc() -> rl.Camera2D {
 }
 
 update :: proc() {
-
 	player_buffer_inputs(&g.player, g.global_frame_counter)
 
 	if frame_by_frame_mode {
@@ -110,6 +109,7 @@ draw :: proc() {
 		if frame_by_frame_mode {
 			rl.DrawText("Frame by frame mode", 3, 20, 2, rl.WHITE)
 		}
+
 	})
 }
 
@@ -159,17 +159,11 @@ game_init :: proc() {
 	character.collision_box = CollisionBox2D {
 		size = {13, 20},
 	}
-	character.attacks = [Character_Attack_ID]Character_Attack_Definition{
-		.Normal = Character_Attack_Definition{
-			stats = {
-				startup_frames = 5,
-				active_frames = 2,
-				recovery_frames = 8,
-			},
+	character.attacks = [Character_Attack_ID]Character_Attack_Definition {
+		.Normal = Character_Attack_Definition {
+			stats = {startup_frames = 5, active_frames = 2, recovery_frames = 8},
 			offset = {15, 0},
-			collision = {
-				size = {10, 10},
-			},
+			collision = {size = {10, 10}},
 		},
 		.Special = Character_Attack_Definition{},
 	}

@@ -147,7 +147,6 @@ actor_move_y :: proc(actor: ^Actor2D, world: ^World, amount: f32) -> CollisionIn
 	sign := math.sign(move_pixels)
 	move_pixels_int := int(move_pixels)
 	for _ in 0 ..< abs(move_pixels_int) {
-		// move like there is no tomorrow!
 		if actor.non_collidable {
 			actor.position.y += sign
 			continue
@@ -201,11 +200,16 @@ actor_is_riding :: proc(actor: ^Actor2D, solid: Solid2D) -> bool {
 }
 
 actor_is_on_floor :: proc(actor: ^Actor2D, world: ^World) -> bool {
+	if actor.non_collidable {
+		return false
+	}
+
 	for solid in sa.slice(&world.solids) {
 		if actor_is_riding(actor, solid) {
 			return true
 		}
 	}
+
 	return false
 }
 

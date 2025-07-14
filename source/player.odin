@@ -20,7 +20,10 @@ Action_Jump :: struct {}
 
 Action_Attack :: struct {}
 
+Action_None :: struct {}
+
 Action :: union {
+	Action_None,
 	Action_Input,
 	Action_Jump,
 	Action_Attack,
@@ -81,7 +84,10 @@ player_buffer_new_input :: proc(player: ^Player, action: Action, current_frame: 
 player_was_action_pressed_consume :: proc(
 	buffer: ^sa.Small_Array($N, Buffered_Input),
 	action: Action,
-) -> bool {
+) -> (
+	Action,
+	bool,
+) {
 	for i := sa.len(buffer^) - 1; i >= 0; i -= 1 {
 		buffered_input, ok := sa.get_ptr_safe(buffer, i)
 		if !ok {
@@ -89,10 +95,10 @@ player_was_action_pressed_consume :: proc(
 		}
 		if buffered_input.action == action && !buffered_input.is_consumed {
 			buffered_input.is_consumed = true
-			return true
+			return buffered_input.action, true
 		}
 	}
-	return false
+	return nil, false
 }
 
 player_buffer_inputs :: proc(player: ^Player, frame: u64) {
