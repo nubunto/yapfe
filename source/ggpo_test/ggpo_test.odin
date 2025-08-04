@@ -6,7 +6,7 @@ import "core:mem"
 import "core:os"
 import "core:slice"
 import "vendor:ggpo"
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 
 SCREEN_WIDTH :: 800
 SCREEN_HEIGHT :: 600

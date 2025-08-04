@@ -3,7 +3,7 @@ package game
 import "base:intrinsics"
 import sa "core:container/small_array"
 import math "core:math"
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 
 DEFAULT_DASH_DURATION_FRAMES :: u8(14)
 DEFAULT_JUMPSQUAT_FRAMES :: u8(5)

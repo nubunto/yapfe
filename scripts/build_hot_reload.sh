@@ -17,7 +17,7 @@ ROOT=$(odin root)
 case $(uname) in
 "Darwin")
     case $(uname -m) in
-    "arm64") LIB_PATH="macos-arm64" ;;
+    # "arm64") LIB_PATH="macos-arm64" ;;
     *)       LIB_PATH="macos" ;;
     esac
 

@@ -1,6 +1,6 @@
 package game
 
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 
 Transform :: struct {
 	position: rl.Vector2,

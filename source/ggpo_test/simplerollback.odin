@@ -9,7 +9,7 @@ import "core:os"
 import "core:slice"
 import "core:thread"
 import "core:time"
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 
 // Helper function to get max of two integers
 max :: proc(a, b: int) -> int {

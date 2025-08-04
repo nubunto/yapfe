@@ -27,7 +27,7 @@ created.
 
 package game
 
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 
 PIXEL_WINDOW_HEIGHT :: 180
 frame_by_frame_mode: bool
@@ -178,14 +178,6 @@ game_init :: proc() {
 	world_push_solid(
 		&world,
 		Solid2D {
-			position = {-10, -20},
-			collision_box = CollisionBox2D{size = {50, 10}},
-			collidable = true,
-		},
-	)
-	world_push_solid(
-		&world,
-		Solid2D {
 			position = {10, -20},
 			collision_box = CollisionBox2D{size = {50, 10}},
 			collidable = true,
@@ -194,39 +186,63 @@ game_init :: proc() {
 	world_push_solid(
 		&world,
 		Solid2D {
-			position = {30, -20},
+			position = {-15, -25},
 			collision_box = CollisionBox2D{size = {50, 10}},
 			collidable = true,
 		},
 	)
+	// world_push_solid(
+	// 	&world,
+	// 	Solid2D {
+	// 		position = {10, -20},
+	// 		collision_box = CollisionBox2D{size = {50, 10}},
+	// 		collidable = true,
+	// 	},
+	// )
+	// world_push_solid(
+	// 	&world,
+	// 	Solid2D {
+	// 		position = {30, -20},
+	// 		collision_box = CollisionBox2D{size = {50, 10}},
+	// 		collidable = true,
+	// 	},
+	// )
+	// world_push_solid(
+	// 	&world,
+	// 	Solid2D {
+	// 		position = {50, -20},
+	// 		collision_box = CollisionBox2D{size = {50, 10}},
+	// 		collidable = true,
+	// 	},
+	// )
+	// world_push_solid(
+	// 	&world,
+	// 	Solid2D {
+	// 		position = {110, -20},
+	// 		collision_box = CollisionBox2D{size = {50, 10}},
+	// 		collidable = true,
+	// 	},
+	// )
+	// world_push_solid(
+	// 	&world,
+	// 	Solid2D {
+	// 		position = {170, -20},
+	// 		collision_box = CollisionBox2D{size = {50, 10}},
+	// 		collidable = true,
+	// 	},
+	// )
+	// world_push_solid(
+	// 	&world,
+	// 	Solid2D {
+	// 		position = {10, 20},
+	// 		collision_box = CollisionBox2D{size = {1000, 10}},
+	// 		collidable = true,
+	// 	},
+	// )
 	world_push_solid(
 		&world,
 		Solid2D {
-			position = {50, -20},
-			collision_box = CollisionBox2D{size = {50, 10}},
-			collidable = true,
-		},
-	)
-	world_push_solid(
-		&world,
-		Solid2D {
-			position = {110, -20},
-			collision_box = CollisionBox2D{size = {50, 10}},
-			collidable = true,
-		},
-	)
-	world_push_solid(
-		&world,
-		Solid2D {
-			position = {170, -20},
-			collision_box = CollisionBox2D{size = {50, 10}},
-			collidable = true,
-		},
-	)
-	world_push_solid(
-		&world,
-		Solid2D {
-			position = {10, 20},
+			position = {20, 20},
 			collision_box = CollisionBox2D{size = {1000, 10}},
 			collidable = true,
 		},

@@ -3,7 +3,7 @@ package game
 import sa "core:container/small_array"
 import "core:fmt"
 import "core:math/linalg"
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 
 Player :: struct {
 	using character: Character,

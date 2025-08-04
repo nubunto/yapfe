@@ -1,6 +1,6 @@
 package game
 
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 import "core:container/small_array"
 
 Dynamic_Objects :: small_array.Small_Array(25, Dynamic_Object)

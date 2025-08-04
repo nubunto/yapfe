@@ -2,7 +2,7 @@ package game
 
 import sa "core:container/small_array"
 import math "core:math"
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 
 World :: struct {
 	actors:  sa.Small_Array(8, Actor2D),

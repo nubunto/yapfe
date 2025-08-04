@@ -1,11 +1,10 @@
 package simpler_rollback
 
 import "core:fmt"
-import "core:math"
 import "core:time"
 import "core:os"
 import "core:net"
-import rl "vendor:raylib"
+import rl "../vendor/raylib"
 
 Vector2 :: [2]f32
 
@@ -303,7 +302,7 @@ main :: proc() {
                 game_state = game_state_update(game_state, current_inputs)
             }
 
-            last_frame_time = time.add(last_frame_time, FRAME_DURATION)
+            last_frame_time = time.time_add(last_frame_time, FRAME_DURATION)
         }
 
         draw_game()
@@ -335,7 +334,7 @@ draw_game :: proc() {
 }
 
 get_local_input :: proc(frame: u32) -> Input {
-    input := Input{frame = frame, axis = {0, 0}}
+    input := Input{frame = frame}
 
     if rl.IsKeyDown(.LEFT)  || rl.IsKeyDown(.A) { input.axis.x -= 1 }
     if rl.IsKeyDown(.RIGHT) || rl.IsKeyDown(.D) { input.axis.x += 1 }

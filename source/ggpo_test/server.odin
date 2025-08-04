@@ -29,16 +29,17 @@ main :: proc() {
             #partial switch event.type {
             case .CONNECT:
                 fmt.printf("A new client connected from %x:%u.\n", event.peer.address.host, event.peer.address.port)
-                event.peer.data = "Client information"
+                ci := "client info"
+                event.peer.data = raw_data(ci)
             case .RECEIVE:
                 fmt.printf("A packet of length %u containing %s was received from %s on channel %u.\n",
                     event.packet.dataLength,
                     event.packet.data,
                     event.peer.data,
                     event.channelID)
-                
+
                 // Echo the packet back to the sender
-                packet := enet.packet_create(event.packet.data, event.packet.dataLength, .RELIABLE)
+                packet := enet.packet_create(event.packet.data, event.packet.dataLength, {.RELIABLE})
                 enet.peer_send(event.peer, 0, packet)
 
             case .DISCONNECT:
